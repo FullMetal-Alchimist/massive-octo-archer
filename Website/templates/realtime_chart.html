@@ -1,0 +1,116 @@
+<html>
+    <head>
+        <script src="//ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/socket.io/0.9.16/socket.io.min.js"></script>
+        <script src="//code.highcharts.com/highcharts.js"></script>
+        <script src="//code.highcharts.com/modules/exporting.js"></script>
+        <meta charset="utf-8" />
+    </head>
+
+    <body>
+        <h1> Graphiques en tout genre </h1>
+        <div id="realtimeinfection" style="height: 400px"></div>
+    </body>
+    <script type="text/javascript">
+        function makeSocket() {
+            var socket = io.connect("http://" + document.domain + ':' + location.port)
+
+            return socket;
+        }
+        $(document).ready(function () {
+
+                var chartingOptions = {
+                chart: {
+                    type: 'line',
+                    renderTo: 'realtimeinfection'
+                },
+                title: {
+                    text: 'Évolution de l\'infection en temps-réel'
+                },
+                xAxis: {
+                    type: 'linear',
+                    tickPixelInterval: 100,
+                    title: {
+                        text: 'Temps en secondes'
+                    },
+                    min: 0
+                },
+                yAxis: {
+                    type: 'linear',
+                    title: {
+                        text: 'Nombre d\'ordinateurs infecté(s)'
+                    },
+                    min: 0
+                },
+                tooltip: {
+                    formatter: function() {
+                        var s = '<b>' + this.x + ' secondes depuis le démarrage.</b>';
+
+                        $.each(this.points, function() {
+                            s += '<br /><b>Score du joueur ' + this.series.name + ':</b> ' + this.y  + ' ordinateurs infecté(s)';
+                        });
+
+                        return s;
+                    },
+                    shared: true
+                }
+            };
+
+            var chart = new Highcharts.Chart(chartingOptions);
+            events = makeSocket();
+            Highcharts.setOptions({
+                global: {
+                    useUTC: false
+                }
+            });
+
+            events.emit('connect');
+
+            events.on('connect', function() {
+                console.log("Socket connected!");
+            });
+
+            events.on('network_configuration', function(data) {
+                try {
+                    json_data = JSON.parse(data);
+                    chart.yAxis[0].setExtremes(0, json_data[0]);
+                }
+                catch (Exception) {
+
+                }
+            });
+
+            events.on('new_player_processed', function(data) {
+               try {
+                   json_data = JSON.parse(data);
+                   $.each(json_data, function(index) {
+                    if (chart.get(this[0]) == null) {
+                    chart.addSeries({data: [[0, 0]], id: this[0], name: this[1]}, false);
+                    console.log("Player " + this[1] + " has been added to the chart."); 
+                   }
+                   chart.redraw();
+                });
+               }
+               catch (Exception) {
+                   
+               }
+            });
+            events.on('infection_occurred_processed', function(data) {
+               try {
+                   json_data = JSON.parse(data);
+                   $.each(json_data, function(index) {
+                    chart.get(this[0]).addPoint([parseInt(this[1]) - parseInt(this[2]), parseInt(this[3])], false);
+
+                   if (chart.yAxis[0].getExtremes().max != this[5]) {
+                    chart.yAxis[0].setExtremes(0, this[5], false);
+                    }
+                   });
+                   chart.redraw();
+               } 
+               catch (Exception) {
+                   
+               }
+            });
+        });
+    </script>
+</html>
